@@ -1,0 +1,14 @@
+{
+  "application_id": "meine-application-id",
+  "api_key": "NNSXS.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "region": "eu1",
+  "tenant": "ttn",
+  "http_port": 8080,
+  "storage_sync_hours": 24,
+  "own_gateway": "mein-gateway",
+  "devices": ["mein-tracker"],
+  "presets": [
+    { "name": "Beispiel: Intervall", "description": "Platzhalter – an deine Firmware anpassen", "f_port": 2, "hex": "01 00 3C" },
+    { "name": "Beispiel: JSON", "description": "Nur mit Downlink-Encoder in TTN", "f_port": 2, "json": { "interval_s": 300 } }
+  ]
+}

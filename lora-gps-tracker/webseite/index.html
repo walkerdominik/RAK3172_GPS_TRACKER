@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPS Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--fg:#1c1f24;--muted:#6b7280;--line:#e3e5e8;
+  --accent:#0b6bcb;--ok:#1a7f37;--warn:#b26b00;--bad:#c62828;--code:#f6f7f9;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121417;--card:#1b1e23;--fg:#e8eaed;--muted:#9aa0a6;--line:#2c3036;
+  --accent:#5aa9ff;--ok:#3fb950;--warn:#e3a33b;--bad:#ff6b6b;--code:#15171b;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+header .sp{flex:1}
+select,input,textarea,button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+button{cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+main{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:12px;padding:12px;align-items:start}
+#map{border-radius:10px;border:1px solid var(--line);height:calc(100vh - 160px);min-height:320px;position:relative;z-index:0;overflow:hidden}
+aside{overflow:auto;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 160px);min-height:320px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.big{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-variant-numeric:tabular-nums}
+.kv dt{color:var(--muted)}.kv dd{margin:0;text-align:right;word-break:break-all}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.row label{color:var(--muted);font-size:12px}
+.muted{color:var(--muted)}
+a{color:var(--accent)}
+.history{grid-column:1/-1;position:relative;z-index:1}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:500;position:sticky;top:0;background:var(--card)}
+tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:var(--code)}
+.tablewrap{max-height:280px;overflow:auto}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:300px;overflow:auto;font-size:12px;margin:6px 0 0}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.presets button{font-size:12px;padding:3px 8px}
+.events{list-style:none;margin:8px 0 0;padding:0;font-size:12px;max-height:160px;overflow:auto}
+.events li{padding:3px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+.events .k{font-weight:600;min-width:110px}
+.msg{font-size:12px;margin-top:6px;min-height:1em}
+.msg.err{color:var(--bad)}.msg.ok{color:var(--ok)}
+textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;resize:vertical}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:9px 4px;font-weight:500;background:var(--card)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:#fff}
+.hint{font-size:12px;color:var(--muted);margin:8px 0}
+.fields{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.fields label{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fields input{width:90px;text-align:right}
+.airtime{font-size:12px;margin-bottom:10px;padding:6px 8px;border-radius:6px;background:var(--code)}
+.airtime.warn{color:var(--warn)}.airtime.bad{color:var(--bad)}
+button.wide{width:100%;padding:8px}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;background:var(--code);border:1px solid var(--line)}
+.tag.pending{color:var(--warn);border-color:var(--warn)}
+details.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+details.fold[open]>summary::before{transform:rotate(90deg)}
+details.fold>summary h2{margin:0}
+details.fold>summary .toggle{margin-left:auto;font-size:12px;color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+details.fold>summary .toggle::after{content:"ausklappen"}
+details.fold[open]>summary .toggle::after{content:"einklappen"}
+details.fold>summary:hover .toggle{border-color:var(--accent)}
+details.fold[open]>summary{margin-bottom:8px}
+@media (max-width:900px){main{grid-template-columns:1fr}#map{height:55vh}aside{max-height:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>GPS Tracker</h1>
+  <span class="pill"><span id="mqttDot" class="dot"></span><span id="mqttTxt">…</span></span>
+  <span class="pill" id="lastSeen"></span>
+  <span class="sp"></span>
+  <label class="pill">Gerät <select id="devSel"></select></label>
+  <label class="pill">Zeitraum
+    <select id="rangeSel">
+      <option value="1">1 Stunde</option><option value="6">6 Stunden</option>
+      <option value="24" selected>24 Stunden</option><option value="168">7 Tage</option>
+      <option value="0">Alles</option>
+    </select>
+  </label>
+  <button id="syncBtn" title="Verpasste Uplinks aus TTN Storage Integration holen">TTN abgleichen</button>
+  <a href="/api/export.csv">CSV</a>
+</header>
+
+<main>
+  <div id="map"></div>
+  <aside>
+    <section class="card">
+      <h2>Position</h2>
+      <div id="pos" class="muted">Noch keine Daten</div>
+    </section>
+    <section class="card" id="modeCard">
+      <h2>Modus</h2>
+      <div id="modeNow" class="muted" style="margin-bottom:10px">Noch keine Daten vom Tracker</div>
+      <div class="seg" id="modeSeg">
+        <button data-m="normal">Normal</button>
+        <button data-m="continuous">Dauer-Tracking</button>
+        <button data-m="theft">Diebstahlschutz</button>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <div class="fields">
+        <label data-for="normal">Intervall
+          <span><input id="fNormal" type="number" min="1" max="1092" value="5"> min</span></label>
+        <label data-for="continuous">Intervall
+          <span><input id="fCont" type="number" min="15" max="3600" value="30"> s</span></label>
+        <label data-for="theft">Lebenszeichen alle
+          <span><input id="fHeart" type="number" min="1" max="255" value="12"> h</span></label>
+        <label data-for="normal theft">Bewegungsschwelle
+          <span><input id="fThresh" type="number" min="16" max="2032" step="16" value="256"> mg</span></label>
+      </div>
+      <div class="airtime" id="airtime"></div>
+      <button class="primary wide" id="modeSend">Modus übernehmen</button>
+      <div class="msg" id="modeMsg"></div>
+    </section>
+    <details class="card fold" id="boxPayload" open>
+      <summary><h2>Payload-Werte</h2><span class="toggle"></span></summary>
+      <dl class="kv" id="decoded"></dl>
+    </details>
+    <details class="card fold" id="boxRadio" open>
+      <summary><h2>Funk</h2><span class="toggle"></span></summary>
+      <dl class="kv" id="radio"></dl>
+    </details>
+    <details class="card fold">
+      <summary><h2>Manueller Downlink</h2><span class="toggle"></span></summary>
+      <div class="presets" id="presets"></div>
+      <div class="row">
+        <label>FPort <input id="dlPort" type="number" min="1" max="223" value="2" style="width:70px"></label>
+        <label>Format
+          <select id="dlFmt"><option value="hex">Hex</option><option value="json">JSON</option></select>
+        </label>
+        <label><input type="checkbox" id="dlConf"> bestätigt</label>
+      </div>
+      <textarea id="dlPayload" rows="2" placeholder="z.B. 01 00 3C"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="dlSend">In Warteschlange</button>
+        <button id="dlReplace" title="Ersetzt alle noch wartenden Downlinks">Warteschlange ersetzen</button>
+      </div>
+      <div class="muted" style="font-size:12px">Klasse-A-Gerät: Der Downlink wird nach dem nächsten Uplink ausgeliefert.</div>
+      <div class="msg" id="dlMsg"></div>
+    </details>
+    <section class="card">
+      <h2>Downlink-Verlauf</h2>
+      <ul class="events" id="events"></ul>
+    </section>
+    <section class="card">
+      <h2>Rohdaten</h2>
+      <details><summary class="muted">JSON des gewählten Uplinks</summary><pre id="raw"></pre></details>
+    </section>
+  </aside>
+  <details class="card history fold" id="histBox" open>
+    <summary><h2>Verlauf <span class="muted" id="count"></span></h2><span class="toggle"></span></summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Zeit</th><th>Breite</th><th>Länge</th><th>Höhe</th><th>Sat.</th><th>Akku</th><th>Modus</th><th>RSSI</th><th>SNR</th><th>SF</th><th>FCnt</th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table>
+    </div>
+  </details>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let all = [], lastId = 0, selectedId = null, status = {}, firstFit = true;
+
+// ---------- Karte
+const map = L.map("map").setView([46.8, 8.2], 8);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap"
+}).addTo(map);
+const track = L.polyline([], {color: "#0b6bcb", weight: 3, opacity: .7}).addTo(map);
+const pts = L.layerGroup().addTo(map);
+let accCircle = null, lastMarker = null;
+
+// ---------- Hilfen
+const fmtTime = iso => iso ? new Date(iso).toLocaleString("de-CH") : "–";
+function ago(iso){
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60) return "vor " + Math.round(s) + " s";
+  if (s < 3600) return "vor " + Math.round(s/60) + " min";
+  if (s < 86400) return "vor " + (s/3600).toFixed(1) + " h";
+  return "vor " + (s/86400).toFixed(1) + " Tagen";
+}
+function fmtVal(v){
+  if (v === true) return "ja";
+  if (v === false) return "nein";
+  if (v === null || v === undefined) return "–";
+  if (typeof v === "object") return "<code>" + esc(JSON.stringify(v)) + "</code>";
+  return esc(v);
+}
+const kv = obj => Object.entries(obj).map(([k,v]) => `<dt>${esc(k)}</dt><dd>${fmtVal(v)}</dd>`).join("");
+
+function visible(){
+  const dev = $("devSel").value, h = +$("rangeSel").value;
+  const since = h ? Date.now() - h*3600e3 : 0;
+  return all.filter(u => (!dev || u.device_id === dev) && new Date(u.received_at) >= since);
+}
+
+// ---------- Darstellung
+function render(){
+  const list = visible();
+  $("count").textContent = `(${list.length} Uplinks)`;
+  const withPos = list.filter(u => u.lat != null);
+
+  track.setLatLngs(withPos.map(u => [u.lat, u.lon]));
+  pts.clearLayers();
+  withPos.forEach((u, i) => {
+    const last = i === withPos.length - 1;
+    L.circleMarker([u.lat, u.lon], {
+      radius: last ? 8 : 4, weight: last ? 3 : 1, color: last ? "#c62828" : "#0b6bcb",
+      fillOpacity: last ? .9 : .6
+    }).bindTooltip(fmtTime(u.received_at)).on("click", () => select(u.id, false)).addTo(pts);
+  });
+  if (firstFit && withPos.length){
+    firstFit = false;
+    withPos.length > 1 ? map.fitBounds(track.getBounds(), {padding:[30,30], maxZoom:17})
+                       : map.setView([withPos[0].lat, withPos[0].lon], 16);
+  }
+
+  $("hist").innerHTML = list.slice().reverse().map(u => {
+    const d = u.decoded, r = u.radio;
+    return `<tr data-id="${u.id}" class="${u.id === selectedId ? "sel" : ""}">
+      <td>${fmtTime(u.received_at)}</td>
+      <td>${u.lat != null ? u.lat.toFixed(6) : "–"}</td><td>${u.lon != null ? u.lon.toFixed(6) : "–"}</td>
+      <td>${d.altitude_m ?? "–"}</td><td>${d.satellites ?? "–"}</td>
+      <td>${d.batteryVoltage_V != null ? d.batteryVoltage_V.toFixed(2) + " V" : "–"}</td>
+      <td>${d.mode ? esc(MODE_LABEL[d.mode] || d.mode) + (d.motionUplink ? " ⚡" : "") : "–"}</td>
+      <td>${r.rssi ?? "–"}</td><td>${r.snr ?? "–"}</td><td>${r.sf ? "SF" + r.sf : "–"}</td><td>${u.f_cnt ?? "–"}</td></tr>`;
+  }).join("");
+
+  const latest = list[list.length - 1];
+  if (latest) $("lastSeen").textContent = "Letzter Uplink " + ago(latest.received_at);
+  renderModeStatus();
+  const sel = list.find(u => u.id === selectedId) || latest;
+  if (sel) showDetail(sel);
+}
+
+function showDetail(u){
+  const d = u.decoded, r = u.radio;
+  if (u.lat != null){
+    $("pos").innerHTML = `<div class="big">${u.lat.toFixed(6)}, ${u.lon.toFixed(6)}</div>
+      <div class="muted">${fmtTime(u.received_at)} · ${ago(u.received_at)}</div>
+      <div style="margin-top:6px">
+        <a href="https://www.google.com/maps?q=${u.lat},${u.lon}" target="_blank">Google Maps</a> ·
+        <a href="https://map.geo.admin.ch/?swisssearch=${u.lat},${u.lon}&zoom=10" target="_blank">swisstopo</a> ·
+        <a href="#" id="copyPos">kopieren</a></div>`;
+    $("copyPos").onclick = e => { e.preventDefault(); navigator.clipboard.writeText(`${u.lat}, ${u.lon}`); };
+    if (accCircle) map.removeLayer(accCircle);
+    if (d.hAccuracy_m) accCircle = L.circle([u.lat, u.lon], {radius: d.hAccuracy_m, weight:1, fillOpacity:.1}).addTo(map);
+  } else {
+    $("pos").innerHTML = `<div class="muted">Kein GPS-Fix in diesem Uplink (${fmtTime(u.received_at)})</div>`;
+  }
+  $("decoded").innerHTML = kv(d) || '<span class="muted">Kein decoded_payload – Payload Formatter in TTN prüfen</span>';
+  $("radio").innerHTML = kv({
+    "Gerät": u.device_id, "Gateway": r.gateway + (r.gateways > 1 ? ` (+${r.gateways-1})` : ""),
+    "RSSI": r.rssi != null ? r.rssi + " dBm" : null, "SNR": r.snr != null ? r.snr + " dB" : null,
+    "Datenrate": r.sf ? `SF${r.sf} / ${r.bw/1000} kHz` : null,
+    "Frequenz": r.frequency ? (r.frequency/1e6).toFixed(1) + " MHz" : null,
+    "Airtime": r.airtime, "FPort": u.f_port, "FCnt": u.f_cnt, "Rohpayload (Base64)": u.frm_payload
+  });
+  $("raw").textContent = JSON.stringify(u.raw, null, 2);
+}
+
+function select(id, pan = true){
+  selectedId = id;
+  const u = all.find(x => x.id === id);
+  if (u && pan && u.lat != null) map.setView([u.lat, u.lon], Math.max(map.getZoom(), 15));
+  render();
+}
+$("hist").onclick = e => { const tr = e.target.closest("tr"); if (tr) select(+tr.dataset.id); };
+$("devSel").onchange = $("rangeSel").onchange = () => { firstFit = true; selectedId = null; render(); };
+
+// ---------- Status & Events
+const KINDS = {
+  "local/push":"→ an TTN übergeben","local/replace":"→ Warteschlange ersetzt",
+  "down/queued":"In Warteschlange","down/sent":"An Gerät gesendet","down/ack":"Bestätigt ✓",
+  "down/nack":"Nicht bestätigt","down/failed":"Fehlgeschlagen","join":"Join"
+};
+function renderStatus(){
+  const m = status.mqtt || "";
+  $("mqttDot").className = "dot " + (m === "verbunden" ? "ok" : m === "Fehler" ? "bad" : m === "aus" ? "" : "warn");
+  $("mqttTxt").textContent = "TTN: " + m + (status.last_error ? " – " + status.last_error : "");
+  const sel = $("devSel"), cur = sel.value;
+  const opts = ['<option value="">alle</option>'].concat((status.devices||[]).map(d => `<option>${esc(d)}</option>`));
+  if (sel.options.length !== opts.length) { sel.innerHTML = opts.join(""); sel.value = cur; }
+  $("presets").innerHTML = (status.presets||[]).map((p,i) => `<button data-i="${i}" title="${esc(p.description||"")}">${esc(p.name)}</button>`).join("");
+  $("events").innerHTML = (status.events||[]).slice(0,30).map(e => {
+    const dl = (e.raw.downlink_queued || e.raw.downlink_sent || e.raw.downlink_ack || e.raw.downlink_failed?.downlink || e.raw);
+    const info = dl.frm_payload ? "Hex " + b64hex(dl.frm_payload) : dl.decoded_payload ? JSON.stringify(dl.decoded_payload) : "";
+    return `<li><span class="muted">${new Date(e.at).toLocaleTimeString("de-CH")}</span><span class="k">${esc(KINDS[e.kind]||e.kind)}</span><span>${esc(info)}</span></li>`;
+  }).join("") || '<li class="muted">Noch keine Downlinks</li>';
+  ["dlSend","dlReplace"].forEach(id => $(id).disabled = !status.downlink_enabled);
+}
+const b64hex = b => { try { return [...atob(b)].map(c => c.charCodeAt(0).toString(16).padStart(2,"0")).join(" ").toUpperCase(); } catch { return b; } };
+
+$("presets").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const p = status.presets[+b.dataset.i];
+  $("dlPort").value = p.f_port ?? 2;
+  $("dlFmt").value = p.json !== undefined ? "json" : "hex";
+  $("dlPayload").value = p.json !== undefined ? JSON.stringify(p.json) : p.hex;
+  $("dlConf").checked = !!p.confirmed;
+};
+
+// ---------- Modus
+const MODE_LABEL = { normal: "Normal", continuous: "Dauer-Tracking", theft: "Diebstahlschutz" };
+const MODE_IDX = { normal: 0, continuous: 1, theft: 2 };
+const MODE_HINT = {
+  normal: "Sendet im eingestellten Intervall eine Position. Bewegung löst zusätzlich eine Meldung aus.",
+  continuous: "GPS bleibt dauernd an, Position im eingestellten Intervall. Braucht viel Akku.",
+  theft: "Tracker schläft. Nur bei Bewegung wird die Position gesendet (bei anhaltender Bewegung etwa jede Minute). Das Lebenszeichen ist nötig, damit Änderungen am Modus ankommen."
+};
+const FUP_S = 30;            // TTN Fair Use: 30 s Airtime pro Tag und Gerät
+let selMode = null, formDirty = false;
+
+function latestOf(dev){
+  for (let i = all.length - 1; i >= 0; i--)
+    if (!dev || all[i].device_id === dev) return all[i];
+}
+const targetDevice = () => $("devSel").value || (status.devices || [])[0];
+
+function fmtInterval(s){
+  return s >= 3600 && s % 3600 === 0 ? s/3600 + " h" : s >= 60 && s % 60 === 0 ? s/60 + " min" : s + " s";
+}
+function cfgText(c){
+  if (!c || !c.mode) return "–";
+  if (c.mode === "theft") return `Diebstahlschutz · Lebenszeichen alle ${c.heartbeat_h} h · Schwelle ${c.motionThreshold_mg} mg`;
+  if (c.mode === "continuous") return `Dauer-Tracking · alle ${fmtInterval(c.interval_s)}`;
+  return `Normal · alle ${fmtInterval(c.interval_s)} · Schwelle ${c.motionThreshold_mg} mg`;
+}
+
+// Letzte gesendete Modus-Konfiguration aus dem Downlink-Verlauf lesen
+function lastSentCfg(dev){
+  const e = (status.events || []).find(e => (e.kind === "local/replace" || e.kind === "local/push")
+            && e.device_id === dev && e.raw.f_port === 10 && e.raw.frm_payload);
+  if (!e) return null;
+  const b = [...atob(e.raw.frm_payload)].map(c => c.charCodeAt(0));
+  if (b[0] !== 1 || b.length < 6) return null;
+  return { at: e.at, mode: Object.keys(MODE_IDX)[b[1]], interval_s: (b[2] << 8) | b[3], heartbeat_h: b[4], motionThreshold_mg: b[5] * 16 };
+}
+const sameCfg = (a, b) => a && b && a.mode === b.mode && a.interval_s === b.interval_s
+  && a.heartbeat_h === b.heartbeat_h && a.motionThreshold_mg === b.motionThreshold_mg;
+
+function renderModeStatus(){
+  const dev = targetDevice(), u = latestOf(dev), cur = u && u.decoded.mode ? u.decoded : null;
+  const sent = lastSentCfg(dev);
+  let html = cur ? `Aktiv: <span class="tag">${esc(cfgText(cur))}</span>`
+                 : (u ? "Aktiver Modus unbekannt – Firmware v6 und neuen Payload-Decoder einspielen" : "Noch keine Daten vom Tracker");
+  if (sent && !sameCfg(sent, cur))
+    html += `<div style="margin-top:6px">Ausstehend: <span class="tag pending">${esc(cfgText(sent))}</span><br>
+             <span style="font-size:12px">Wird nach dem nächsten Uplink übertragen (Taster am Tracker drücken beschleunigt das).</span></div>`;
+  $("modeNow").innerHTML = html;
+
+  // Formular mit dem aktiven Modus füllen, solange der Benutzer nichts geändert hat
+  if (!formDirty && cur){
+    selMode = cur.mode;
+    if (cur.mode === "continuous") $("fCont").value = cur.interval_s;
+    else $("fNormal").value = Math.max(1, Math.round(cur.interval_s / 60));
+    $("fHeart").value = cur.heartbeat_h;
+    $("fThresh").value = cur.motionThreshold_mg;
+  }
+  if (!selMode) selMode = "normal";
+  renderModeForm();
+}
+
+function formCfg(){
+  return {
+    mode: selMode,
+    interval_s: selMode === "continuous" ? Math.round(+$("fCont").value) : Math.round(+$("fNormal").value * 60),
+    heartbeat_h: Math.round(+$("fHeart").value),
+    motionThreshold_mg: Math.round(+$("fThresh").value / 16) * 16
+  };
+}
+
+function renderModeForm(){
+  document.querySelectorAll("#modeSeg button").forEach(b => b.classList.toggle("on", b.dataset.m === selMode));
+  document.querySelectorAll(".fields label").forEach(l => l.style.display = l.dataset.for.split(" ").includes(selMode) ? "" : "none");
+  $("modeHint").textContent = MODE_HINT[selMode];
+
+  // Airtime-Abschätzung (TTN Fair Use Policy)
+  const u = latestOf(targetDevice());
+  const air = u && u.radio.airtime ? parseFloat(u.radio.airtime) : 0.072;
+  const c = formCfg(), box = $("airtime");
+  if (selMode === "theft"){
+    box.className = "airtime";
+    box.textContent = `Ohne Bewegung: ${Math.ceil(24 / Math.max(1, c.heartbeat_h))} Uplinks/Tag. Bei Bewegung zusätzlich etwa 1 Uplink pro Minute.`;
+  } else {
+    const perDay = 86400 / Math.max(1, c.interval_s), sec = perDay * air;
+    box.className = "airtime " + (sec > FUP_S ? "bad" : sec > FUP_S * 0.7 ? "warn" : "");
+    box.textContent = `≈ ${Math.round(perDay)} Uplinks/Tag · ≈ ${sec.toFixed(1)} s Sendezeit/Tag (TTN-Limit ${FUP_S} s)`
+      + (sec > FUP_S ? ` – zu viel für Dauerbetrieb, Intervall mind. ${Math.ceil(86400 * air / FUP_S)} s` : "");
+  }
+}
+
+$("modeSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  selMode = b.dataset.m; formDirty = true; renderModeForm();
+};
+document.querySelectorAll(".fields input").forEach(i => i.oninput = () => { formDirty = true; renderModeForm(); });
+
+$("modeSend").onclick = async () => {
+  const msg = $("modeMsg"), c = formCfg();
+  msg.className = "msg err";
+  const dev = targetDevice();
+  if (!dev) { msg.textContent = "Kein Gerät bekannt."; return; }
+  if (selMode === "normal" && (c.interval_s < 60 || c.interval_s > 65535)) { msg.textContent = "Intervall: 1 bis 1092 Minuten."; return; }
+  if (selMode === "continuous" && (c.interval_s < 15 || c.interval_s > 3600)) { msg.textContent = "Intervall: 15 bis 3600 Sekunden."; return; }
+  if (c.heartbeat_h < 1 || c.heartbeat_h > 255) { msg.textContent = "Lebenszeichen: 1 bis 255 Stunden."; return; }
+  if (c.motionThreshold_mg < 16 || c.motionThreshold_mg > 2032) { msg.textContent = "Schwelle: 16 bis 2032 mg."; return; }
+
+  const bytes = [1, MODE_IDX[c.mode], c.interval_s >> 8, c.interval_s & 255, c.heartbeat_h, c.motionThreshold_mg / 16];
+  const hex = bytes.map(x => x.toString(16).padStart(2, "0")).join("");
+  // "replace": ersetzt ältere, noch nicht ausgelieferte Modus-Befehle
+  const r = await fetch("/api/downlink", { method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ device_id: dev, f_port: 10, hex, confirmed: false, mode: "replace" }) });
+  const j = await r.json();
+  msg.className = "msg " + (j.ok ? "ok" : "err");
+  msg.textContent = j.ok ? `${MODE_LABEL[c.mode]} an TTN übergeben – wird nach dem nächsten Uplink aktiv.` : j.error;
+  poll();
+};
+
+// Verlauf ein-/ausklappen, Zustand merken
+document.querySelectorAll("details.fold[id]").forEach(d => {
+  try { const v = localStorage.getItem("fold_" + d.id); if (v !== null) d.open = v === "1"; } catch {}
+  d.addEventListener("toggle", () => {
+    try { localStorage.setItem("fold_" + d.id, d.open ? "1" : "0"); } catch {}
+    setTimeout(() => map.invalidateSize(), 50);
+  });
+});
+
+// ---------- Downlink
+async function sendDownlink(mode){
+  const msg = $("dlMsg"); msg.className = "msg"; msg.textContent = "";
+  const dev = $("devSel").value || (status.devices||[])[0];
+  if (!dev) { msg.className = "msg err"; msg.textContent = "Kein Gerät bekannt."; return; }
+  const body = { device_id: dev, f_port: +$("dlPort").value, confirmed: $("dlConf").checked, mode };
+  const txt = $("dlPayload").value.trim();
+  if ($("dlFmt").value === "json"){
+    try { body.json = JSON.parse(txt); } catch { msg.className = "msg err"; msg.textContent = "Ungültiges JSON."; return; }
+  } else body.hex = txt;
+  const r = await fetch("/api/downlink", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  const j = await r.json();
+  msg.className = "msg " + (j.ok ? "ok" : "err");
+  msg.textContent = j.ok ? `Downlink für ${dev} an TTN übergeben.` : j.error;
+  poll();
+}
+$("dlSend").onclick = () => sendDownlink("push");
+$("dlReplace").onclick = () => sendDownlink("replace");
+
+$("syncBtn").onclick = async () => {
+  $("syncBtn").disabled = true;
+  const j = await (await fetch("/api/sync", {method:"POST", body:"{}"})).json();
+  $("syncBtn").disabled = false;
+  alertMsg(j.message || j.error);
+  poll();
+};
+function alertMsg(t){ $("lastSeen").textContent = t; }
+
+// ---------- Polling
+async function poll(){
+  try {
+    const [ups, st] = await Promise.all([
+      fetch("/api/uplinks?after=" + lastId).then(r => r.json()),
+      fetch("/api/status").then(r => r.json())
+    ]);
+    status = st;
+    if (ups.length){
+      all = all.concat(ups).sort((a,b) => new Date(a.received_at) - new Date(b.received_at));
+      lastId = Math.max(lastId, ...ups.map(u => u.id));
+    }
+    renderStatus(); render();
+  } catch (e) {
+    $("mqttDot").className = "dot bad"; $("mqttTxt").textContent = "Server nicht erreichbar – läuft tracker.py?";
+  }
+}
+poll(); setInterval(poll, 5000);
+</script>
+</body>
+</html>
